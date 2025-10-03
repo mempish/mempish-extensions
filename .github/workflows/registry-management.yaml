@@ -19,7 +19,7 @@ jobs:
             - name: Registry Management Workflow Dispatch
               env:
                   env:
-                        GH_TOKEN: ${{ github.token }}
+                      GH_TOKEN: ${{ github.token }}
               run: |
                   gh api \
                     --method POST \
