@@ -18,7 +18,8 @@ jobs:
         steps:
             - name: Registry Management Workflow Dispatch
               env:
-                  GH_TOKEN: ${{ secrets.REGISTRY_MANAGEMENT }}
+                  env:
+                        GH_TOKEN: ${{ github.token }}
               run: |
                   gh api \
                     --method POST \
