@@ -396,129 +396,146 @@ export class BatoToExtension implements BatoToImplementation {
         query: SearchQuery,
         metadata?: { page?: number },
     ): Promise<PagedResults<SearchResultItem>> {
-        const page = metadata?.page ?? 1; // Default to page 1 if not provided
-        const languages: string[] = getLanguages();
+    const page = metadata?.page ?? 1;
+    const languages: string[] = getLanguages();
 
-        const urlBuilder = new URLBuilder(DOMAIN_NAME).addPath("v3x-search");
+    // Read genre filter map if present
+    const genresFilter = query.filters?.find(f => f.id === "genres");
+    const genresInclusionMap = (genresFilter?.value ?? {}) as Record<string, "included" | "excluded">;
 
-        // Add search query
-        if (query.title && query.title.trim() !== "") {
-            urlBuilder.addQuery("word", query.title.trim());
-        }
-
-        //Add Language
-        urlBuilder.addQuery("lang", languages.join(","));
-
-        // Handle genres correctly
-        const genresFilter = query.filters?.find((f) => f.id === "genres");
-
-        if (genresFilter) {
-            // Check if we have the genres as an object with inclusion status
-            const genresInclusionMap = genresFilter.value as Record<
-                string,
-                "included" | "excluded"
-            >;
-
-            if (genresInclusionMap) {
-                // Get the filters to access the genre options if needed
-                const filters = await this.getSearchFilters();
-                const genreFilter = filters.find((f) => f.id === "genres") as {
-                    id: string;
-                    type: string;
-                    options: { id: string; value: string }[];
-                };
-
-                // Collect all included genres
-                const includedGenres: string[] = [];
-
-                if (genreFilter?.options) {
-                    Object.entries(genresInclusionMap).forEach(
-                        ([id, inclusion]) => {
-                            if (inclusion === "included") {
-                                // Find the genre option by id
-                                const genreOption = genreFilter.options.find(
-                                    (opt) => opt.id === id,
-                                );
-                                if (genreOption) {
-                                    // Convert to kebab-case as in the example URL
-                                    const genreValue = genreOption.value
-                                        .toLowerCase()
-                                        .replace(/\s+/g, "-");
-                                    includedGenres.push(genreValue);
-                                }
-                            }
-                            // Excluded genres not supported in the URL format
-                        },
-                    );
-                }
-
-                // Add all included genres as a comma-separated list
-                if (includedGenres.length > 0) {
-                    urlBuilder.addQuery("genres", includedGenres.join(","));
-                }
-            }
-            // If genres is already an array of strings
-            else if (Array.isArray(genresFilter.value)) {
-                urlBuilder.addQuery("genres", genresFilter.value.join(","));
-            }
-        }
-
-        // Sort by upload time
-        urlBuilder.addQuery("sort", "field_upload");
-
-        // Add page number
-        urlBuilder.addQuery("page", page.toString());
-
-        const searchUrl = urlBuilder.build();
-        const request = { url: searchUrl, method: "GET" };
-        const $ = await this.fetchCheerio(request);
-        const searchResults: SearchResultItem[] = [];
-
-        console.log(`The URL is: ${searchUrl}`);
-
-        // Parse the search results
-        $(".grid.grid-cols-1.gap-5.border-t.border-t-base-200.pt-5 > div").each(
-            (_, element) => {
-                const unit = $(element);
-                const titleLink = unit.find("h3.font-bold.space-x-1.text-lg a");
-                const href = titleLink.attr("href") || "";
-                const mangaId = href.split("/title/")[1]?.split("/")[0] || ""; // Extract manga ID from URL
-                const image = unit.find("img").attr("src") || "";
-                const title = titleLink.text().trim();
-
-                if (mangaId && title) {
-                    searchResults.push({
-                        mangaId: mangaId,
-                        imageUrl: image,
-                        title: title,
-                        subtitle: "", // Add subtitle if needed
-                    });
-                }
-            },
-        );
-
-        // Handle pagination
-        let maxPage = 1;
-        let hasNextPage = false;
-
-        // Find all page buttons in the pagination section
-        $(".flex.items-center.flex-wrap.space-x-1.my-10.justify-center a").each(
-            (_, element) => {
-                const pageNumber = parseInt($(element).text().trim(), 10);
-                if (!isNaN(pageNumber) && pageNumber > maxPage) {
-                    maxPage = pageNumber;
-                }
-            },
-        );
-
-        // Check if there's a next page
-        hasNextPage = page < maxPage;
-
-        return {
-            items: searchResults,
-            metadata: hasNextPage ? { page: page + 1 } : undefined,
+    // Helper: get included genres as site slugs.
+    // For /browse we want underscore slugs: "reverse_harem"
+    const getIncludedGenreSlugs = async () => {
+        if (!genresFilter) return [] as string[];
+        const filters = await this.getSearchFilters();
+        const genreFilter = filters.find(f => f.id === "genres") as {
+        options: { id: string; value: string }[];
         };
+
+        const included: string[] = [];
+        for (const [id, inclusion] of Object.entries(genresInclusionMap)) {
+        if (inclusion !== "included") continue;
+        const opt = genreFilter?.options?.find(o => o.id === id);
+        if (!opt) continue;
+        // Normalize to underscore for /browse, lowercased
+        const slug = opt.value.toLowerCase().replace(/\s+/g, "_").replace(/-+/g, "_");
+        included.push(slug);
+        }
+        return included;
+    };
+
+    const includedGenres = await getIncludedGenreSlugs();
+    const hasGenres = includedGenres.length > 0;
+
+    // Build request URL
+    const useBrowse = hasGenres;               // <- key change: genres => /browse
+    const urlBuilder = new URLBuilder(DOMAIN_NAME);
+
+    if (useBrowse) {
+        // /browse?genres=reverse_harem,romance&langs=en&page=1
+        urlBuilder
+        .addPath("browse")
+        .addQuery("langs", languages.join(","))
+        .addQuery("page", String(page));
+        if (includedGenres.length) {
+        urlBuilder.addQuery("genres", includedGenres.join(","));
+        }
+        // Optional: if you want "newest" etc. add sort here; leaving default returns matching results
+        // urlBuilder.addQuery("sort", "field_upload"); // only if site supports it on /browse
+    } else {
+        // Pure title search → /v3x-search
+        urlBuilder
+        .addPath("v3x-search")
+        .addQuery("lang", languages.join(","))
+        .addQuery("page", String(page))
+        .addQuery("sort", "field_upload");
+
+        if (query.title && query.title.trim() !== "") {
+        urlBuilder.addQuery("word", query.title.trim());
+        }
+        // NOTE: we intentionally do NOT add genres here to avoid the reverse-harem mismatch
     }
+
+    const searchUrl = urlBuilder.build();
+    const request = { url: searchUrl, method: "GET" };
+    const $ = await this.fetchCheerio(request);
+    const items: SearchResultItem[] = [];
+
+    console.log(`The URL is: ${searchUrl}`);
+
+    if (useBrowse) {
+        // Parse /browse result grid (same as your browse/latest parsers)
+        $('div#series-list > div.col.item').each((_, el) => {
+        const unit = $(el);
+        const titleLink = unit.find('a.item-title').first();
+        const href = titleLink.attr('href') || "";            // /series/12345/...
+        const mangaId = href.match(/\/series\/(\d+)/)?.[1] || "";
+        const image = unit.find('a.item-cover img').attr('data-src')
+                    || unit.find('a.item-cover img').attr('src')
+                    || "";
+        const title = titleLink.text().trim();
+
+        if (mangaId && title) {
+            items.push({
+            mangaId,
+            imageUrl: image?.trim() ?? "",
+            title,
+            subtitle: unit.find('div.item-volch a.visited').first().text().trim() || undefined,
+            });
+        }
+        });
+
+        // Pagination for /browse (rel="next" or infer)
+        let hasNext = false;
+        const nextHref = $('ul.pagination li.page-item a.page-link[rel="next"]').attr('href');
+        if (nextHref) {
+        hasNext = true;
+        } else {
+        const active = Number($('ul.pagination li.page-item.active span.page-link').text().trim());
+        const last = Number(
+            $('ul.pagination li.page-item a.page-link')
+            .map((_, a) => $(a).text().trim())
+            .get()
+            .filter(t => /^\d+$/.test(t))
+            .map(Number)
+            .pop() || 0
+        );
+        hasNext = !!(active && last && active < last);
+        }
+
+        return { items, metadata: hasNext ? { page: page + 1 } : undefined };
+    } else {
+        // Parse /v3x-search result grid (Astro)
+        $('.grid.grid-cols-1.gap-5.border-t.border-t-base-200.pt-5 > div').each((_, el) => {
+        const unit = $(el);
+        const a = unit.find('h3.font-bold.space-x-1.text-lg a');
+        const href = a.attr('href') || "";
+        const mangaId = href.split('/title/')[1]?.split('/')[0] || ""; // /title/123456/title-slug
+        const image = unit.find('img').attr('src') || "";
+        const title = a.text().trim();
+
+        if (mangaId && title) {
+            items.push({
+            mangaId,
+            imageUrl: image?.trim() ?? "",
+            title,
+            subtitle: "",
+            });
+        }
+        });
+
+        // Pagination for /v3x-search
+        let maxPage = 1;
+        $('.flex.items-center.flex-wrap.space-x-1.my-10.justify-center a').each((_, el) => {
+        const n = parseInt($(el).text().trim(), 10);
+        if (!Number.isNaN(n) && n > maxPage) maxPage = n;
+        });
+        const hasNext = page < maxPage;
+
+        return { items, metadata: hasNext ? { page: page + 1 } : undefined };
+    }
+    }
+
 
     // Populates the title details
     async getMangaDetails(mangaId: string): Promise<SourceManga> {

@@ -1,7 +1,7 @@
 {
-    "name": "template-extensions",
-    "repositoryName": "Template Extensions (0.9)",
-    "description": "Paperback extensions designed as templates to help developers get started quickly. Maintained by Inkdex.",
+    "name": "mempish-extensions",
+    "repositoryName": "Mempish Extensions (0.9)",
+    "description": "",
     "private": true,
     "type": "module",
     "scripts": {
@@ -23,6 +23,8 @@
         "@paperback/toolchain": "^1.0.0-alpha.53",
         "@paperback/types": "^1.0.0-alpha.53",
         "@types/eslint": "^9.6.1",
+        "axios": "^1.12.2",
+        "cheerio": "^1.1.2",
         "eslint": "^9.31.0",
         "husky": "^9.1.7",
         "prettier": "^3.6.2",
