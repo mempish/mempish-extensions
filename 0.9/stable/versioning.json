@@ -1,0 +1,55 @@
+{
+  "buildTime": "2025-10-03T00:52:10.978Z",
+  "builtWith": {
+    "toolchain": "1.0.0-alpha.53",
+    "types": "1.0.0-alpha.53"
+  },
+  "repository": {
+    "name": "Mempish Extensions (0.9)",
+    "description": ""
+  },
+  "sources": [
+    {
+      "name": "Bato.To",
+      "description": "Extension that pulls content from bato.to.",
+      "version": "1.0.0-alpha.1",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "ADULT",
+      "capabilities": [
+        32,
+        4,
+        64,
+        1
+      ],
+      "badges": [],
+      "developers": [
+        {
+          "name": "Egwau"
+        },
+        {
+          "name": "mempish"
+        }
+      ],
+      "id": "BatoTo"
+    },
+    {
+      "name": "Content Template",
+      "description": "Template that shows the functionality of content providing extensions.",
+      "version": "1.0.0-alpha.3",
+      "icon": "icon.png",
+      "language": "en",
+      "contentRating": "SAFE",
+      "capabilities": 101,
+      "badges": [],
+      "developers": [
+        {
+          "name": "Celarye",
+          "website": "https://celarye.dev",
+          "github": "https://github.com/Celarye"
+        }
+      ],
+      "id": "ContentTemplate"
+    }
+  ]
+}
